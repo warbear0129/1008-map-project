@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="icon" href="{{ url_for('static', filename = 'img/favicon.ico')}}">
+    <title>Shortest Path to SIT Punggol</title>
+    <link href="{{ url_for('static', filename = 'css/bootstrap.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename = 'css/dashboard.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename = 'css/leaflet.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+
+  <body>
+    <nav class="navbar navbar-dark fixed-top bg-dark flex-md-nowrap p-0 shadow">
+      <a class="navbar-brand col-sm-3 col-md-2 mr-0" href="#">Shortest Path to SIT Punggol</a>
+      <ul class="navbar-nav px-3">
+        <li class="nav-item text-nowrap">
+        </li>
+      </ul>
+    </nav>
+
+    <div class="container-fluid">
+      <div class="row">
+        <nav class="col-md-2 d-none d-md-block bg-light sidebar">
+          <div class="sidebar-sticky">
+            <ul class="nav flex-column">
+              <li class="nav-item">
+                <div class="nav-link">
+                  <label for="DrpSrc">I am travelling from: </label>
+                  <select class="form-control" id="DrpSrc"></select>
+                </div>
+              </li>
+              <li class="nav-item">
+                <div class="nav-link">
+                  <label for="DrpDst">I want to go to: </label>
+                  <select class="form-control" id="DrpDst">
+                    <option selected>SIT Punggol Campus</option>
+                  </select>
+                </div>
+              </li>
+            </ul>
+            <li class="nav-link">
+                <button type="submit" id="BtnCalculate" class="btn btn-primary">Calculate</button>
+            </li>
+          </div>
+        </nav>
+
+        <main role="main" class="col-md-9 ml-sm-auto col-lg-10" style="padding: 0px; margin-top: 50px; height:100%">
+            <div id="divMap" style="height: 900px; width: 100%"></div>
+        </main> 
+      </div>
+    </div>
+    <script src="{{ url_for('static', filename = 'js/jquery.js') }}"></script>
+    <script src="{{ url_for('static', filename = 'js/popper.js') }}"></script>
+    <script src="{{ url_for('static', filename = 'js/bootstrap.js') }}"></script>
+    <script src="{{ url_for('static', filename = 'js/leaflet.js') }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js"></script>
+
+    <script>
+        var map = L.map('divMap').setView([1.4051712, 103.917206], 15);
+
+        /* Initializing the map */
+        L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}{r}.png', {
+            maxZoom: 18,
+            id: 'mapbox/streets-v11',
+            tileSize: 512,
+            zoomOffset: -1,
+            accessToken: 'pk.eyJ1Ijoid2FyYmVhcjAxMjkiLCJhIjoiY2s4M2s0MGt2MGZ4MTNscWs4cnBsOXBleCJ9.Bbnh7cIhda1viC-oJW7kcA'
+        }).addTo(map);
+
+        /* Setting up the SIT marker */
+        var sit_marker = L.marker([1.4051712, 103.917206], {
+          icon: L.icon({
+            iconUrl: "{{ url_for('static', filename = 'img/sit_logo.png') }}",
+            iconSize: [32, 32],
+          }),
+          title: "SIT Punggol Campus",
+        }).addTo(map);
+
+        sit_marker.bindTooltip("Future SIT Punggol Campus");
+
+        /* 
+          Create dummy marker for source.
+          This marker will be dynamically updated as the user changes the dropdown option.
+        */
+        var src_marker = L.marker([0, 0], {
+          icon: L.icon({
+            iconUrl: "{{ url_for('static', filename = 'img/src_marker.png') }}",
+            iconSize: [32, 32],
+          }),
+          title: "You are here right now",
+        }).addTo(map);
+
+        /* 
+          Create dummy marker for destination.
+          This marker will be dynamically updated as the user changes the dropdown option.
+        */
+        var dst_marker = L.marker([0, 0], {
+          icon: L.icon({
+            iconUrl: "{{ url_for('static', filename = 'img/dst_marker.png') }}",
+            iconSize: [24, 32],
+          }),
+          title: "You want to get here",
+        }).addTo(map);
+
+        dst_marker.bindTooltip("You want to get here");
+
+        $(document).ready(function() {
+          /* Populate both the drop down boxes */
+          $.getJSON("/api/nodes/all", function(each) {
+            $.each(each, function(key, value) {
+              $("#DrpSrc").append(new Option(value["name"], value["id"]))
+              $("#DrpDst").append(new Option(value["name"], value["id"]))
+            }) 
+          });
+        })
+        
+        /* Update the marker's position when user changes the dropdown box option */
+        $("#DrpSrc").change(function() {
+          $.getJSON("/api/nodes/id/" + this.value, function(response) {
+            var src_coords = new L.LatLng(response.lat, response.long);
+            map.setView(src_coords, 15, {
+              "animate": true
+            });
+
+            src_marker.setLatLng(src_coords);
+            src_marker.bindTooltip(`You are at <b>${response.name}</b>: <br>
+                                    Latitude: ${response.lat} <br>
+                                    Longitude: ${response.long}`);
+          })
+        })
+
+        /* Update the marker's position when user changes the dropdown box option */
+        $("#DrpDst").change(function() {
+          $.getJSON("/api/nodes/id/" + this.value, function(response) {
+            var dst_coords = new L.LatLng(response.lat, response.long);
+            map.setView(dst_coords, 15, {
+              "animate": true
+            });
+
+            dst_marker.setLatLng(dst_coords);
+            dst_marker.bindTooltip(`Your destination is <b>${response.name}</b>: <br>
+                                    Latitude: ${response.lat} <br>
+                                    Longitude: ${response.long}`);
+          })
+        })
+
+        /* Show route and all when user clicks the blue calculate button */
+        $("#BtnCalculate").click(function() {
+          /* HELP ME WITH THIS*/
+
+          var src_id = $("#DrpSrc").val();
+          var dst_id = $("#DrpDst").val();
+
+          $.getJSON("/api/path/" + src_id + "/" + dst_id, function(response) {
+            console.log(response);
+            var msgArray = Array();
+            var markers = Array();
+            var distance = 0.0;
+            var msg = "";
+            var color = "orange";
+            var points = [];
+
+            for (var i = 1; i < response.length; i++) {
+              data = response[i];
+              distance += data.distance;
+              points = [new L.LatLng(data.source.lat, data.source.long),
+                        new L.LatLng(data.destination.lat, data.destination.long)];
+
+              if (data.type == "Bus") {
+                msg = (`Take bus ${data.bus_service} from ${data.source.name} to ${data.destination.name}`);
+                color = 'red';
+              }
+
+              else if (data.type == "MRT") {
+                msg = (`Take the MRT from ${data.source.name} to ${data.destination.name}`);
+                color = 'gray';
+              }
+
+              else {
+                msg = (`Walk from ${data.source.name} to ${data.destination.name}`);
+                color = 'orange';
+              }
+
+
+
+              msgArray.push(msg);
+            }
+            console.log(msgArray);
+            console.log("Total distance is: " + distance);
+          });
+        });
+    </script>
+</body>
+</html>
