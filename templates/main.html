@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -42,6 +43,13 @@
             <li class="nav-link">
                 <button type="submit" id="BtnCalculate" class="btn btn-primary">Calculate</button>
             </li>
+            <li class="nav-link">
+                <button type="submit" id="BtnWalk" class="btn btn-primary">Walk/Drive</button>
+            </li>
+
+            <ul class="list-group" id="route_box">
+              <li class="list-group-item">Please enter a route</li>
+            </ul>
           </div>
         </nav>
 
@@ -57,8 +65,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js"></script>
 
     <script>
-        var map = L.map('divMap').setView([1.4051712, 103.917206], 15);
 
+
+
+        var map = L.map('divMap').setView([1.4051712, 103.917206], 15);
         /* Initializing the map */
         L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}{r}.png', {
             maxZoom: 18,
@@ -147,13 +157,18 @@
 
         /* Show route and all when user clicks the blue calculate button */
         $("#BtnCalculate").click(function() {
-          /* HELP ME WITH THIS*/
+          map.eachLayer(function (layer) {
+              if(layer instanceof L.Path)
+                  map.removeLayer(layer);
 
+          });
+          var ul = document.getElementById("route_box");
+          ul.innerHTML = '';
           var src_id = $("#DrpSrc").val();
           var dst_id = $("#DrpDst").val();
 
+
           $.getJSON("/api/path/" + src_id + "/" + dst_id, function(response) {
-            console.log(response);
             var msgArray = Array();
             var markers = Array();
             var distance = 0.0;
@@ -169,27 +184,100 @@
 
               if (data.type == "Bus") {
                 msg = (`Take bus ${data.bus_service} from ${data.source.name} to ${data.destination.name}`);
+
                 color = 'red';
+                L.Routing.control({
+                waypoints: [
+                    L.latLng(data.source.lat, data.source.long),
+                    L.latLng(data.destination.lat, data.destination.long)
+                    ],
+                    routeWhileDragging: true
+                }).addTo(map)._container.style.display = "None";
+
+              msgArray.push(msg);
+
+              var li = document.createElement("li");
+              li.className = "list-group-item";
+              li.appendChild(document.createTextNode(msg));
+              ul.appendChild(li);
               }
 
               else if (data.type == "MRT") {
                 msg = (`Take the MRT from ${data.source.name} to ${data.destination.name}`);
+
                 color = 'gray';
+                var pointA = new L.LatLng(data.source.lat, data.source.long);
+                var pointB = new L.LatLng(data.destination.lat, data.destination.long);
+                var pointList = [pointA, pointB];
+
+                var firstpolyline = new L.Polyline(pointList, {
+                    color: 'red',
+                    weight: 3,
+                    opacity: 0.5,
+                    smoothFactor: 1
+                });
+                firstpolyline.addTo(map);
+
+                var li = document.createElement("li");
+                li.className = "list-group-item";
+                li.appendChild(document.createTextNode(msg));
+                ul.appendChild(li);
+
               }
 
               else {
                 msg = (`Walk from ${data.source.name} to ${data.destination.name}`);
                 color = 'orange';
+                L.Routing.control({
+                waypoints: [
+                    L.latLng(data.source.lat, data.source.long),
+                    L.latLng(data.destination.lat, data.destination.long)
+                    ],
+                    routeWhileDragging: true
+                }).addTo(map)._container.style.display = "None";
               }
 
 
-
-              msgArray.push(msg);
             }
+
             console.log(msgArray);
             console.log("Total distance is: " + distance);
+
           });
         });
+
+        /* Show route and all when user clicks the blue calculate button */
+        $("#BtnWalk").click(function() {
+          map.eachLayer(function (layer) {
+              if(layer instanceof L.Path)
+                  map.removeLayer(layer);
+
+          });
+
+          var ul = document.getElementById("route_box");
+          ul.innerHTML = '';
+
+          var src_id = $("#DrpSrc").val();
+          var dst_id = $("#DrpDst").val();
+
+          $.getJSON("/api/path/" + src_id + "/" + dst_id, function(response) {
+            var i = 1;
+            start = response[i];
+            for (i = 1; i < response.length; i++) {
+
+            }
+            end = response[i-1];
+            L.Routing.control({
+            waypoints: [
+                L.latLng(start.source.lat, start.source.long),
+                L.latLng(end.destination.lat, end.destination.long)
+                ],
+                routeWhileDragging: true
+            }).addTo(map);
+          });
+        });
+
+
     </script>
 </body>
 </html>
