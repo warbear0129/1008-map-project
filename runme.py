@@ -11,6 +11,8 @@ for module in ["flask", "json"]:
 import flask
 import json
 import db
+from algorithms import *
+from objects import *
 
 app = flask.Flask(__name__)
 db = db.Database()
@@ -36,9 +38,11 @@ def id_nodes(id):
 def get_path(source, destination):
     source = db.select_node(id=source)
     destination = db.select_node(id=destination)
-    result = db.select_adj_list().getPath(source, destination)[::-1]
+    adj_list = db.select_adj_list()
+    a = Dijkstra(source, destination, Graph(data=adj_list), ListPriorityQueue())
+    result = a.getPath()
     
-    if result == {}:
+    if result == []:
         return {"Error": "No possible routes"}
     
     return json.dumps(result, default=lambda o: o.__dict__)
