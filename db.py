@@ -106,7 +106,7 @@ class Database:
         return Node(data=result) if result is not None else None
     
     
-    def select_adj_list(self) -> Graph:
+    def select_adj_list(self) -> dict:
         """
         Query the edge table in the database and return the data in the form of an adjacency list.
         Note that edges with source/destination that do not exist in the Nodes table will be ommited
@@ -135,4 +135,4 @@ class Database:
                                     JOIN edge on nodes.id = edge.source
                                     JOIN nodes n2 on n2.id = edge.destination''')
         
-        return Graph(data=result)
+        return result

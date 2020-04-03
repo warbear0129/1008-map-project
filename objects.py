@@ -1,6 +1,7 @@
 import json
 import heapq
 from math import cos, asin, sqrt
+from abc import ABC, abstractmethod
 
 class Node:
     def __init__(self, id=None, name=None, description=None, lat=None, long=None, type=None, data=None):
@@ -116,11 +117,11 @@ class Edge:
             self.bus_service = bus_service
             self.type = type
             
-    def __repr__(self):
+    def __repr__(self) -> str:
         """
         Returns a string representation of this object.
         """
-        return str(self.__dict__)
+        return json.dumps(self, default=lambda o: o.__dict__, indent=4)
     
     def __eq__(self, other):
         """
@@ -142,6 +143,12 @@ class Edge:
             
         return False
     
+    def __lt__(self, other):
+        return True if self.distance < other.distance else False
+    
+    def __gt__(self, other):
+        return True if self.distance > other.distance else False
+    
     def __hash__(self) -> int:
         """
         Return hash for this Node object.
@@ -151,6 +158,7 @@ class Edge:
             int representing the hash of this object
         """
         return hash((self.source, self.destination, self.distance, self.type, self.bus_service))
+    
         
 class Graph:
     adjacency_list = {}
@@ -239,8 +247,17 @@ class Graph:
         """
         return list(self.adjacency_list.keys())
     
+
+    def edges(self) -> list:
+        edges = []
+        
+        for node, edge in self.adjacency_list.items():
+            edges.append(edge)
+            
+        return edges
     
-    def adj(self, source) -> list:
+    
+    def adj(self, source: Node) -> list:
         """
         Returns a list edges that are adjacent to the source node.
         If source node is not in the adjacency list, will return an empty list
@@ -254,55 +271,245 @@ class Graph:
         
         return self.adjacency_list[source]
                 
-    def getPath(self, source_node, destination_node) -> list:
-        """
-        Computes shortest path from source_node to destination_node.
+class PQItem:
+    """
+    Generic object that will work with whatever
+    implemention of priority queue that we will create.
+    """
+    def __init__(self, priority, element):
+        self.priority = priority
+        self.element = element
         
-        Arguments:
-            source_node      -- Node object representing the starting point of the route
-            destination_node -- Node object representing the ending point of the route
+    def __lt__(self, other):
+        return self.priority < other.priority
+    
+    def __gt__(self, other):
+        return self.priority > other.priority
+    
+    def __eq__(self, other):
+        if isinstance(other, PQItem):
+            return (other.element == self.element)     
+        return False
+    
+class PriorityQueue(ABC):
+    @abstractmethod
+    def pop(self):
+        pass
+    
+    @abstractmethod
+    def push(self, element: PQItem):
+        pass
+    
+    @abstractmethod
+    def getMin(self):
+        pass
+    
+    @abstractmethod
+    def isEmpty(self):
+        pass
+    
+class ListPriorityQueue(PriorityQueue):
+    """
+    Basic priority queue implementation using a list.
+    We use QuickSort to maintain its priority.
+    Lowest priority will always be at the front of the queue (index 0)
+    """
+    def __init__(self):
+        self.queue = []
+        
+    def pop(self):
+        if self.isEmpty():
+            return None
 
-        Returns:
-            List of edge objects representing the shortest path from source_node to destination_node.
-            Empty list if there is no possible routes between the two nodes.
-        """
+        minElement = self.queue[0]
+        del self.queue[0]
+        return minElement      
+    
+    def push(self, element: PQItem):
+        self.queue.append(element)
+        self.queue = self.__quickSort()
         
-        # Keep track of visited nodes
-        seen = set()
+    def getMin(self):
+        return None if self.isEmpty() else self.queue[0]
         
-        # paths will store our visited nodes and their relaxed weight value
-        # the first key is an Edge object representing the source_node with distance of zero
-        paths = {source_node: Edge(source=None,
-                                   destination=source_node,
-                                   distance=0.0)}
-        current_node = source_node
-        
-        while current_node != destination_node:
-            seen.add(current_node)
+    def isEmpty(self):
+        return len(self.queue) == 0
+    
+    def contains(self, node) -> bool:
+        return node in self.queue
+              
+    def __quickSort(self, queue=None):
+        if queue is None:
+            queue = self.queue
             
-            for edge in self.adj(current_node):
+        if len(queue) < 2:
+            return queue
+        
+        pivot = queue[len(queue) // 2]
+        left = [e for e in queue if e < pivot]
+        right = [e for e in queue if e > pivot]
+        
+        return self.__quickSort(left) + [pivot] + self.__quickSort(right)
+    
+    
+class MinHeap(PriorityQueue):
+    """
+    Binary Heap implemented in the form of a MinHeap since we are mainly using it for
+    A-Star and Dijkstra's Algorithm. 1-based indexing is used. The minimum priority
+    element will always be at index 1.
+    """
+    def __init__(self) -> None:
+        self.heap = [PQItem(-100, None)]
+        
+    def push(self, element: PQItem) -> None:
+        "Adds a new element into the heap without compromising the heap"
+        self.heap.append(element)
+        
+        size: int = self.len()
+        
+        while (self.at(size) < self.atParent(size)):
+            self.swap(size, self.parent(size))
+            size = self.parent(size)
+        
+    def pop(self):
+        "Remove and returns the min element from the heap without compromising the heap"
+        if self.len() == 0:
+            return None
+        
+        if self.len() == 1:
+            result = self.heap[1]
+            del self.heap[1]
+            return result
+        
+        result = self.heap[1]
+        self.heap[1] = self.heap[self.len()]
+        del self.heap[self.len()]
+        self.heapify(1)
+        return result
+     
+    def isEmpty(self) -> bool:
+        return self.len() == 1
+    
+    def getMin(self):
+        return self.heap[1]
+    
+    def contains(self, node) -> bool:
+        return node in self.heap
+    
+    def at(self, index: int):
+        return self.heap[index]
+    
+    def atParent(self, index: int):
+        return self.heap[self.parent(index)]
+    
+    def atLeft(self, index: int):
+        if self.len() < self.left(index):
+            return None
+        return self.heap[self.left(index)]
+    
+    def atRight(self, index: int):
+        if self.len() < self.right(index):
+            return None
+        return self.heap[self.right(index)]
+        
+    def parent(self, index: int) -> int:
+        return index // 2
+    
+    def left(self, index: int) -> int:
+        return 2 * index
+    
+    def right(self, index: int) -> int:
+        return index + index + 1
+    
+    def isLeaf(self, index: int) -> bool:
+        return ((index <= self.len())) and (index >= self.len() // 2)
             
-                curr_distance = edge.distance + paths[current_node].distance
+    def swap(self, first: int, second: int) -> None:
+        self.heap[first], self.heap[second] = self.heap[second], self.heap[first]
+             
+    def heapify(self, index: int) -> None:
+        # we don't deal with leaf nodes
+        if self.isLeaf(index):
+            return
+        
+        # nothing to heapify if the element is less than both its child
+        if (self.at(index) < self.atLeft(index)) and (self.at(index) < self.atRight(index)):
+            return
+        
+        if (self.atLeft(index) < self.atRight(index)):
+            self.swap(index, self.left(index))
+            self.heapify(self.left(index))
+            
+        else:
+            self.swap(index, self.right(index))
+            self.heapify(self.right(index))
+        
+    def heapifyAll(self) -> None:
+        index: int = self.len() // 2
+        
+        while index >= 1:
+            self.heapify(index)
+            index -= 1
 
-                if edge.destination not in paths:
-                    paths[edge.destination] = edge
-                    paths[edge.destination].distance = curr_distance
-                
+    def len(self) -> int:
+        return len(self.heap) - 1
+
+
+class BSTPriorityQueue(PriorityQueue):
+    
+    class BSTNode(PQItem):
+        def __init__(self, priority, element, left=None, right=None):
+            super().__init__(priority, element)
+            self.left: BSTNode = left
+            self.right: BSTNode = right
+            
+        def push(self, element) -> None:
+            if element.priority < self.priority:
+                if not self.left:
+                    self.left = element
                 else:
-                    if paths[edge.destination].distance > curr_distance:
-                        paths[edge.destination] = edge
-                        paths[edge.destination].distance = curr_distance
+                    self.left.push(element)
                     
-            next_edges = {node: paths[node] for node in paths if node not in seen}
+            else:
+                if not self.right:
+                    self.right = element
+                else:
+                    self.right.push(element)
+                    
+        def getMin(self):
+            if self.left is None:
+                return self
             
-            if not next_edges:
-                return []
-            
-            current_node = min(next_edges, key = lambda k: next_edges[k].distance)
-            
-        shortest_path = []
-        while current_node is not None:
-            shortest_path.append(paths[current_node])
-            current_node = paths[current_node].source
+            return self.left.getMin()
+                    
+ 
+    def __init__(self) -> None:
+        self.root: BSTNode = None
         
-        return shortest_path
+    def push(self, element: BSTNode) -> None:
+        if not self.root:
+            self.root = element
+            
+        else:
+            self.root.push(element)
+            
+    
+    def pop(self):
+        if self.isEmpty():
+            return None
+        
+        if self.root.left:
+            this = self.root
+            
+            while this.left.left is not None:
+                this = this.left
+
+    def getMin(self):
+        if self.isEmpty():
+            return None
+        
+        return self.root.getMin()
+
+    
+    def isEmpty(self) -> bool:
+        return self.root is None
